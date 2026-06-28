@@ -1225,7 +1225,7 @@ body {
 <script>
 const LABELS = ["Portada", "Desayunos — Sugerencias del Chef", "Desayunos — ¡Buenos Días!", "Desayunos — Un Poco Más Tardados", "Desayunos — Huevos", "Desayunos — Bebidas", "Desayunos — Jugos, Cereales y Panes", "Comida — Sugerencias del Chef", "Comida — Carnes y Entradas", "Comida — Algo Ligero y Sopas", "Comida — Pescado y Mariscos", "Comida — Pollo, Filetes y Cecinas", "Comida — Con Gran Sabor", "Comida — Sándwiches y Postres", "Comida — Bebidas", "Contraportada"];
 
-let pf, pageW, pageH;
+let pf, pageW, pageH, isSingle = false;
 
 function updateUI(page) { /* indicador removido */ }
 
@@ -1261,6 +1261,7 @@ function fitAll() {
 
 function centerBook(page) {
   const container = document.getElementById('book-container');
+  if (isSingle) { container.style.transform = 'translateX(0)'; return; }  // una hoja → ya viene centrada
   const total = LABELS.length;
 
   let tx = 0;
@@ -1281,30 +1282,38 @@ window.addEventListener('load', () => {
   const vh = window.innerHeight;
   const RATIO = 1.6;
 
-  pageH = Math.floor(vh * 0.92);
-  pageW = Math.floor(pageH / RATIO);
+  // UNA SOLA HOJA en teléfonos y en cualquier pantalla en vertical (tablets parados).
+  // LIBRO ABIERTO (dos hojas) en escritorio y pantallas anchas en horizontal.
+  isSingle = (vw < 768) || (vh > vw);
 
-  if (vw >= 1440) {
-    pageW = Math.min(pageW, 480);
+  if (isSingle) {
+    // Una hoja, lo más grande posible sin salirse de la pantalla
+    pageW = Math.min(Math.floor(vw * 0.96), Math.floor((vh * 0.96) / RATIO));
     pageH = Math.floor(pageW * RATIO);
-  } else if (vw >= 1024) {
-    pageW = Math.min(pageW, 420);
-    pageH = Math.floor(pageW * RATIO);
-  } else if (vw >= 768) {
-    const maxW = Math.floor((vw - 20) / 2);
-    pageW = Math.min(pageW, maxW);
-    pageH = Math.floor(pageW * RATIO);
-  } else {
-    pageW = Math.floor((vw - 12) / 2);
-    pageH = Math.floor(pageW * RATIO);
-    if (pageH > vh * 0.88) {
-      pageH = Math.floor(vh * 0.88);
+    if (pageH > vh * 0.96) {
+      pageH = Math.floor(vh * 0.96);
       pageW = Math.floor(pageH / RATIO);
     }
+    container.style.width  = pageW + 'px';        // contenedor = UNA hoja
+    container.style.height = pageH + 'px';
+  } else {
+    // Libro abierto (dos hojas) — escritorio / horizontal
+    pageH = Math.floor(vh * 0.92);
+    pageW = Math.floor(pageH / RATIO);
+    if (vw >= 1440) {
+      pageW = Math.min(pageW, 480);
+      pageH = Math.floor(pageW * RATIO);
+    } else if (vw >= 1024) {
+      pageW = Math.min(pageW, 420);
+      pageH = Math.floor(pageW * RATIO);
+    } else {
+      const maxW = Math.floor((vw - 20) / 2);
+      pageW = Math.min(pageW, maxW);
+      pageH = Math.floor(pageW * RATIO);
+    }
+    container.style.width  = (pageW * 2) + 'px';   // contenedor = DOS hojas
+    container.style.height = pageH + 'px';
   }
-
-  container.style.width  = (pageW * 2) + 'px';
-  container.style.height = pageH + 'px';
 
   document.querySelectorAll('.stf-page').forEach(p => {
     p.style.width  = pageW + 'px';
@@ -1329,8 +1338,8 @@ window.addEventListener('load', () => {
       size: 'fixed',
       showCover: true,
       drawShadow: true,
-      flippingTime: 800,
-      usePortrait: false,
+      flippingTime: 700,
+      usePortrait: isSingle,        // ← UNA hoja en móvil/vertical, libro en escritorio
       autoSize: false,
       maxShadowOpacity: 0.6,
       showPageCorners: true,
@@ -1348,14 +1357,14 @@ window.addEventListener('load', () => {
       centerBook(e.data);
     });
 
-    pf.on('init', () => centerBook(0));
+    pf.on('init', () => centerBook(pf.getCurrentPageIndex()));
 
     pf.on('changeOrientation', () => {
       centerBook(pf.getCurrentPageIndex());
     });
 
     updateUI(0);
-    setTimeout(() => centerBook(0), 60);
+    setTimeout(() => centerBook(pf.getCurrentPageIndex()), 60);
   };
 
   // Esperar a que carguen las fuentes (cambian la altura real del texto)
@@ -1365,6 +1374,18 @@ window.addEventListener('load', () => {
   } else {
     startFlip();
   }
+
+  // Si se cruza el umbral móvil/escritorio o se rota el dispositivo,
+  // se recarga para recalcular el layout correcto.
+  let lastSingle = isSingle;
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const nowSingle = (window.innerWidth < 768) || (window.innerHeight > window.innerWidth);
+      if (nowSingle !== lastSingle) { lastSingle = nowSingle; location.reload(); }
+    }, 300);
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') flipNext();
